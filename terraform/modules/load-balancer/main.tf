@@ -17,7 +17,7 @@ resource "aws_lb" "main" {
 
 # ALB Target Group for Backend Service
 resource "aws_lb_target_group" "backend" {
-  name        = "${var.project_name}-backend-tg"
+  name        = "${var.project_name}-bg-tg"
   port        = 8080
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -36,7 +36,7 @@ resource "aws_lb_target_group" "backend" {
   deregistration_delay = 30
   
   tags = {
-    Name        = "${var.project_name}-backend-tg"
+    Name        = "${var.project_name}-bg-tg"
     Environment = var.environment
   }
 }

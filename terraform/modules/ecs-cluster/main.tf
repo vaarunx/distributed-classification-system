@@ -4,7 +4,7 @@ resource "aws_ecs_cluster" "main" {
   
   setting {
     name  = "containerInsights"
-    value = "enabled"
+    value = "enhanced"
   }
   
   tags = {
@@ -182,6 +182,8 @@ resource "aws_ecs_service" "backend" {
   desired_count   = var.backend_desired_count
   launch_type     = "FARGATE"
   
+  force_new_deployment = true  # Always deploy latest
+  
   network_configuration {
     security_groups  = [var.ecs_security_group_id]
     subnets         = var.private_subnet_ids
@@ -192,10 +194,6 @@ resource "aws_ecs_service" "backend" {
     target_group_arn = var.backend_target_group_arn
     container_name   = "backend"
     container_port   = 8080
-  }
-  
-  lifecycle {
-    ignore_changes = [task_definition]
   }
   
   tags = {
@@ -212,14 +210,12 @@ resource "aws_ecs_service" "ml_service" {
   desired_count   = var.ml_desired_count
   launch_type     = "FARGATE"
   
+  force_new_deployment = true  # Always deploy latest
+  
   network_configuration {
     security_groups  = [var.ecs_security_group_id]
     subnets         = var.private_subnet_ids
     assign_public_ip = true  # Required for Fargate
-  }
-  
-  lifecycle {
-    ignore_changes = [task_definition]
   }
   
   tags = {
