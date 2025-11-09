@@ -13,6 +13,11 @@ terraform {
   }
 }
 
+# Add this after the providers and before the modules
+data "aws_iam_role" "lab_role" {
+  name = "LabRole"
+}
+
 provider "aws" {
   region = var.aws_region
 }
@@ -31,14 +36,6 @@ data "aws_ecr_authorization_token" "token" {}
 # Networking Module
 module "networking" {
   source = "./modules/networking"
-  
-  project_name = var.project_name
-  environment  = var.environment
-}
-
-# IAM Module
-module "iam" {
-  source = "./modules/iam"
   
   project_name = var.project_name
   environment  = var.environment
@@ -95,10 +92,10 @@ module "ecs_cluster" {
   private_subnet_ids          = module.networking.private_subnet_ids
   ecs_security_group_id       = module.networking.ecs_security_group_id
   
-  # IAM Roles
-  ecs_task_execution_role_arn = module.iam.ecs_task_execution_role_arn
-  backend_task_role_arn       = module.iam.backend_task_role_arn
-  ml_task_role_arn           = module.iam.ml_task_role_arn
+# IAM Roles
+  ecs_task_execution_role_arn = data.aws_iam_role.lab_role.arn
+  backend_task_role_arn       = data.aws_iam_role.lab_role.arn
+  ml_task_role_arn           = data.aws_iam_role.lab_role.arn
   
   # Container Images (from container_registry module)
   backend_image_url           = module.container_registry.backend_image_url
@@ -124,7 +121,6 @@ module "ecs_cluster" {
   
   depends_on = [
     module.container_registry,
-    module.iam,
     module.storage,
     module.queues
   ]

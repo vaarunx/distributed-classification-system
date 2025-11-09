@@ -51,16 +51,12 @@ resource "docker_image" "backend" {
     context    = var.backend_context
     dockerfile = var.backend_dockerfile
     platform   = "linux/amd64"
-    
-    label = {
-      environment = var.environment
-      service     = "backend"
-    }
   }
   
+  # Force rebuild when source files change
   triggers = {
     dir_sha = sha256(join("", [
-      for f in fileset(var.backend_context, "**/*") : 
+      for f in fileset(var.backend_context, "**/*.go") : 
       filesha256("${var.backend_context}/${f}")
     ]))
   }
@@ -69,6 +65,7 @@ resource "docker_image" "backend" {
 resource "docker_registry_image" "backend" {
   name = docker_image.backend.name
   
+  # Force push when image changes
   triggers = {
     image_id = docker_image.backend.image_id
   }
@@ -82,13 +79,9 @@ resource "docker_image" "ml_service" {
     context    = var.ml_service_context
     dockerfile = var.ml_service_dockerfile
     platform   = "linux/amd64"
-    
-    label = {
-      environment = var.environment
-      service     = "ml-service"
-    }
   }
   
+  # Force rebuild when source files change
   triggers = {
     dir_sha = sha256(join("", [
       for f in fileset(var.ml_service_context, "**/*.py") : 
@@ -100,6 +93,7 @@ resource "docker_image" "ml_service" {
 resource "docker_registry_image" "ml_service" {
   name = docker_image.ml_service.name
   
+  # Force push when image changes
   triggers = {
     image_id = docker_image.ml_service.image_id
   }

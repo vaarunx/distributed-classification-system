@@ -5,8 +5,6 @@ import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
-import signal
-import sys
 
 from controllers import ClassificationController
 from schemas import ClassificationRequest, JobType
@@ -22,7 +20,7 @@ logger = logging.getLogger(__name__)
 class SQSWorker:
     """Worker to process classification requests from SQS"""
     
-    def __init__(self):
+    def __init__(self, use_signal_handlers=True):
         # AWS clients
         self.sqs_client = boto3.client('sqs', region_name=os.getenv('AWS_REGION', 'us-east-1'))
         
@@ -46,6 +44,9 @@ class SQSWorker:
         
         # Shutdown flag
         self.shutdown = False
+        
+        # Signal handlers flag
+        self.use_signal_handlers = use_signal_handlers
         
         logger.info(f"SQS Worker initialized with {self.max_workers} workers")
     
@@ -170,28 +171,34 @@ class SQSWorker:
                 logger.error(f"Error in worker loop: {str(e)}")
                 await asyncio.sleep(5)
     
-    def handle_shutdown(self, signum, frame):
-        """Handle shutdown signal"""
-        logger.info("Shutdown signal received, stopping worker...")
+    def stop(self):
+        """Stop the worker gracefully"""
+        logger.info("Stopping SQS worker...")
         self.shutdown = True
         self.executor.shutdown(wait=True)
-        sys.exit(0)
     
     async def start(self):
         """Start the worker"""
-        # Register signal handlers
-        signal.signal(signal.SIGTERM, self.handle_shutdown)
-        signal.signal(signal.SIGINT, self.handle_shutdown)
-        
         logger.info("SQS Worker started")
         
-        # Start worker loop
-        await self.worker_loop()
+        # Only register signal handlers if running as main process
+        if self.use_signal_handlers:
+            import signal
+            signal.signal(signal.SIGTERM, lambda s, f: self.stop())
+            signal.signal(signal.SIGINT, lambda s, f: self.stop())
+        
+        try:
+            # Start worker loop
+            await self.worker_loop()
+        except Exception as e:
+            logger.error(f"Worker loop failed: {str(e)}")
+        finally:
+            logger.info("SQS Worker stopped")
 
 
 async def main():
-    """Main entry point for SQS worker"""
-    worker = SQSWorker()
+    """Main entry point for SQS worker when run standalone"""
+    worker = SQSWorker(use_signal_handlers=True)
     await worker.start()
 
 

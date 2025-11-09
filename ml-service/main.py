@@ -5,7 +5,6 @@ import asyncio
 import threading
 from controllers import ClassificationController
 from schemas import ClassificationRequest, ClassificationResponse
-from sqs_worker import SQSWorker
 
 # Configure logging
 logging.basicConfig(
@@ -25,28 +24,45 @@ app = FastAPI(
 controller = ClassificationController()
 
 # Global variable for SQS worker
-sqs_worker = None
 worker_thread = None
 
 
 def run_sqs_worker():
     """Run SQS worker in a separate thread"""
     try:
+        # Import here to avoid circular imports
+        from sqs_worker import SQSWorker
+        
+        # Create new event loop for this thread
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        worker = SQSWorker()
+        
+        # Create and start worker without signal handlers
+        worker = SQSWorker(use_signal_handlers=False)
         loop.run_until_complete(worker.start())
     except Exception as e:
-        logger.error(f"SQS Worker failed: {str(e)}")
+        logger.error(f"SQS Worker error: {str(e)}")
+        # Don't crash the entire service if SQS worker fails
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
 
 
 @app.on_event("startup")
 async def startup_event():
     """Start SQS worker on application startup"""
     global worker_thread
+    
+    logger.info("Starting SQS Worker thread...")
     worker_thread = threading.Thread(target=run_sqs_worker, daemon=True)
     worker_thread.start()
-    logger.info("SQS Worker thread started")
+    
+    # Give the worker a moment to start
+    await asyncio.sleep(2)
+    
+    if worker_thread.is_alive():
+        logger.info("SQS Worker thread started successfully")
+    else:
+        logger.warning("SQS Worker thread may have failed to start")
 
 
 @app.on_event("shutdown")
