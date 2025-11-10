@@ -1,0 +1,75 @@
+# Docker Compose for local testing
+version: '3.8'
+
+services:
+  # LocalStack for AWS services
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    environment:
+      - SERVICES=s3,sqs,dynamodb
+      - DEBUG=1
+      - DATA_DIR=/tmp/localstack/data
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - "./tmp/localstack:/tmp/localstack"
+    networks:
+      - classifier-network
+
+  # Backend service
+  backend:
+    build:
+      context: ./backend-service
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - INPUT_BUCKET=distributed-classifier-input
+      - OUTPUT_BUCKET=distributed-classifier-output
+      - REQUEST_QUEUE_URL=http://localstack:4566/000000000000/classification-requests
+      - STATUS_QUEUE_URL=http://localstack:4566/000000000000/classification-status
+      - DYNAMODB_TABLE=classification-jobs
+    depends_on:
+      - localstack
+    networks:
+      - classifier-network
+
+  # ML service
+  ml-service:
+    build:
+      context: ./ml-service
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - REQUEST_QUEUE_URL=http://localstack:4566/000000000000/classification-requests
+      - STATUS_QUEUE_URL=http://localstack:4566/000000000000/classification-status
+      - MAX_WORKERS=2
+      - BATCH_SIZE=5
+      - VISIBILITY_TIMEOUT=300
+    depends_on:
+      - localstack
+    networks:
+      - classifier-network
+    volumes:
+      - "./ml-service/models_cache:/root/.cache/huggingface"
+
+networks:
+  classifier-network:
+    driver: bridge
+
+volumes:
+  localstack_data:
