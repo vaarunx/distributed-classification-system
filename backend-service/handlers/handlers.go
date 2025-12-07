@@ -8,8 +8,12 @@ import (
     "fmt"
     "log"
     "net/http"
+    "net/url"
+    "path/filepath"
+    "strings"
     "time"
 
+    "github.com/aws/aws-sdk-go/aws"
     "github.com/aws/aws-sdk-go/service/sqs"
     "github.com/gin-gonic/gin"
     "github.com/google/uuid"
@@ -299,4 +303,167 @@ func (h *Handler) copyImagesToOutput(jobID string, result *models.Classification
     }
 
     return outputPaths, nil
+}
+
+// GetUploadURL generates a presigned URL for uploading an image to S3
+func (h *Handler) GetUploadURL(c *gin.Context) {
+    var req models.UploadURLRequest
+    if err := c.ShouldBindJSON(&req); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+        return
+    }
+
+    // Generate a unique S3 key with timestamp and UUID to avoid collisions
+    timestamp := time.Now().Format("20060102-150405")
+    uniqueID := uuid.New().String()[:8]
+    ext := filepath.Ext(req.Filename)
+    baseName := strings.TrimSuffix(req.Filename, ext)
+    if baseName == "" {
+        baseName = "image"
+    }
+    // Sanitize filename
+    baseName = strings.ReplaceAll(baseName, " ", "_")
+    baseName = strings.ReplaceAll(baseName, "/", "_")
+    
+    s3Key := fmt.Sprintf("uploads/%s_%s_%s%s", baseName, timestamp, uniqueID, ext)
+
+    // Generate presigned URL (valid for 1 hour)
+    expiration := 1 * time.Hour
+    presignedURL, err := h.s3Svc.GetPresignedUploadURL(h.config.InputBucket, s3Key, req.ContentType, expiration)
+    if err != nil {
+        log.Printf("Error generating presigned URL: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate upload URL"})
+        return
+    }
+
+    expiresAt := time.Now().Add(expiration)
+    c.JSON(http.StatusOK, models.UploadURLResponse{
+        UploadURL: presignedURL,
+        S3Key:     s3Key,
+        ExpiresAt: expiresAt,
+    })
+}
+
+// ListImages returns a list of all images in the input bucket
+func (h *Handler) ListImages(c *gin.Context) {
+    // Optional prefix filter from query parameter
+    prefix := c.Query("prefix")
+    
+    objects, err := h.s3Svc.ListObjects(h.config.InputBucket, prefix)
+    if err != nil {
+        log.Printf("Error listing objects: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list images"})
+        return
+    }
+
+    // Filter to only image files and convert to ImageInfo
+    imageExtensions := map[string]bool{
+        ".jpg":  true,
+        ".jpeg": true,
+        ".png":  true,
+        ".gif":  true,
+        ".bmp":  true,
+        ".webp": true,
+    }
+
+    var images []models.ImageInfo
+    for _, obj := range objects {
+        if obj.Key == nil {
+            continue
+        }
+        
+        key := *obj.Key
+        ext := strings.ToLower(filepath.Ext(key))
+        
+        // Only include image files
+        if imageExtensions[ext] {
+            images = append(images, models.ImageInfo{
+                Key:          key,
+                Size:         aws.Int64Value(obj.Size),
+                LastModified: aws.TimeValue(obj.LastModified),
+            })
+        }
+    }
+
+    c.JSON(http.StatusOK, models.ListImagesResponse{
+        Images: images,
+    })
+}
+
+// DeleteImage deletes an image from S3
+func (h *Handler) DeleteImage(c *gin.Context) {
+    // Get the S3 key from URL parameter (wildcard route captures full path)
+    keyParam := c.Param("filepath")
+    
+    // Remove leading slash if present
+    if len(keyParam) > 0 && keyParam[0] == '/' {
+        keyParam = keyParam[1:]
+    }
+    
+    // URL decode the key
+    s3Key, err := url.QueryUnescape(keyParam)
+    if err != nil {
+        // If decoding fails, try using the param as-is
+        s3Key = keyParam
+    }
+
+    if s3Key == "" {
+        c.JSON(http.StatusBadRequest, gin.H{"error": "S3 key is required"})
+        return
+    }
+
+    err = h.s3Svc.DeleteObject(h.config.InputBucket, s3Key)
+    if err != nil {
+        log.Printf("Error deleting object: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete image"})
+        return
+    }
+
+    c.JSON(http.StatusOK, models.DeleteImageResponse{
+        Success: true,
+        Message: fmt.Sprintf("Image %s deleted successfully", s3Key),
+    })
+}
+
+// ListJobs returns a list of all jobs with optional filtering
+func (h *Handler) ListJobs(c *gin.Context) {
+    // Get query parameters
+    limitStr := c.DefaultQuery("limit", "100")
+    statusFilter := c.Query("status")
+
+    // Parse limit
+    var limit int
+    if limitStr != "" {
+        if _, err := fmt.Sscanf(limitStr, "%d", &limit); err != nil {
+            limit = 100
+        }
+    } else {
+        limit = 100
+    }
+
+    // Get jobs from DynamoDB
+    jobs, err := h.dynamoSvc.ListJobs(limit, statusFilter)
+    if err != nil {
+        log.Printf("Error listing jobs: %v", err)
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list jobs"})
+        return
+    }
+
+    // Convert to JobSummary (exclude full results to keep response lightweight)
+    summaries := make([]models.JobSummary, 0, len(jobs))
+    for _, job := range jobs {
+        summaries = append(summaries, models.JobSummary{
+            JobID:       job.JobID,
+            Status:      job.Status,
+            JobType:     job.JobType,
+            CreatedAt:   job.CreatedAt,
+            CompletedAt: job.CompletedAt,
+            NumImages:   len(job.S3Keys),
+        })
+    }
+
+    c.JSON(http.StatusOK, models.ListJobsResponse{
+        Jobs:  summaries,
+        Total: len(summaries),
+    })
 }

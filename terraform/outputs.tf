@@ -4,6 +4,11 @@ output "alb_endpoint" {
   value       = "http://${module.load_balancer.alb_dns_name}"
 }
 
+output "backend_api_url" {
+  description = "Backend API base URL"
+  value       = "http://${module.load_balancer.alb_dns_name}"
+}
+
 output "api_endpoints" {
   description = "API endpoints"
   value = {
@@ -11,6 +16,8 @@ output "api_endpoints" {
     submit = "http://${module.load_balancer.alb_dns_name}/submit"
     status = "http://${module.load_balancer.alb_dns_name}/status/{jobId}"
     result = "http://${module.load_balancer.alb_dns_name}/result/{jobId}"
+    upload_url = "http://${module.load_balancer.alb_dns_name}/upload-url"
+    images = "http://${module.load_balancer.alb_dns_name}/images"
   }
 }
 

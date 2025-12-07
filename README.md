@@ -1,13 +1,22 @@
 # Distributed Image Classifier - Simplified Deployment
 
-A serverless image classification system with **automatic Docker builds** handled by Terraform.
+A serverless image classification system with **automatic Docker builds** handled by Terraform and a **modern Streamlit web interface** for easy interaction.
 
-## ✨ Key Improvement
+## ✨ Key Features
 
-**No manual Docker commands needed!** Terraform now:
-- Builds Docker images automatically
-- Pushes to ECR
-- Deploys everything in one command
+**Infrastructure:**
+- **No manual Docker commands needed!** Terraform now:
+  - Builds Docker images automatically
+  - Pushes to ECR
+  - Deploys everything in one command
+
+**User Interface:**
+- **Modern Streamlit Web App** with:
+  - Image upload and gallery management
+  - Custom categories for reusable label sets
+  - Job submission and monitoring
+  - Complete job history with filtering
+  - Real-time status updates
 
 ## 📁 New Module Structure
 
@@ -71,6 +80,85 @@ Terraform detects code changes and:
 - Updates ECS task definitions
 - Restarts services automatically
 
+## 🖥️ Streamlit Web Interface
+
+The system includes a modern Streamlit web interface for easy interaction.
+
+### Running the Streamlit App
+
+**Local Development:**
+```bash
+# Using the provided script
+./scripts/run-streamlit.sh
+
+# Or manually
+cd streamlit-app
+streamlit run app.py
+```
+
+**With Deployed Backend:**
+```bash
+export BACKEND_API_URL=$(terraform -chdir=terraform output -raw alb_endpoint)
+./scripts/run-streamlit.sh
+```
+
+The app will be available at `http://localhost:8501` (or next available port).
+
+### Streamlit Features
+
+#### 📤 Upload Images
+- Upload multiple images at once
+- Direct upload to S3 using presigned URLs
+- Progress tracking for batch uploads
+- View recently uploaded images
+
+#### 🖼️ Image Gallery
+- Browse all images in S3
+- Search and filter images
+- Select multiple images for batch operations
+- Delete images individually or in bulk
+- Auto-refresh every 30 seconds
+
+#### 📋 Submit Classification Jobs
+- **Two Job Types:**
+  - **Image Classification (MobileNet)**: Uses ImageNet labels
+  - **Custom Classification (CLIP)**: Use your own custom labels
+  
+- **Custom Categories** (NEW!):
+  - Save and reuse named label sets (e.g., "Animals", "Vehicles")
+  - Manage categories in the sidebar
+  - Quick selection when submitting jobs
+  - Edit and delete saved categories
+
+- **Configuration Options:**
+  - Top K predictions (1-10)
+  - Confidence threshold (0.0-1.0)
+  - Select multiple images per job
+
+#### 📊 Job Status & Results
+- Monitor active jobs in real-time
+- Auto-refresh option (every 5 seconds)
+- View detailed results when completed:
+  - Summary metrics (total, classified, unknown)
+  - Images grouped by label
+  - Detailed results table
+  - Processing time and model used
+
+#### 📜 Job History (NEW!)
+- View all submitted jobs with filtering:
+  - Filter by status (pending, queued, processing, completed, failed)
+  - Filter by job type (image_classification, custom_classification)
+- Sortable job list
+- Click on any job to view details
+- See job summary and results
+- Auto-refresh every 30 seconds
+
+### UI Configuration
+
+- **Backend URL**: Configure in sidebar (defaults to `http://localhost:8080`)
+- **Health Check**: Test backend connectivity
+- **Custom Categories Management**: Create, edit, and delete label sets
+
 ## 📊 Testing the API
 
 ```bash
@@ -92,6 +180,9 @@ curl ${ALB_ENDPOINT}/status/{job-id}
 
 # Get results
 curl ${ALB_ENDPOINT}/result/{job-id}
+
+# List all jobs (NEW!)
+curl ${ALB_ENDPOINT}/jobs?limit=100&status=completed
 ```
 
 ## 🔧 Configuration
@@ -170,13 +261,32 @@ If ECS services won't start:
 - Verify security groups allow traffic
 - Ensure task roles have correct permissions
 
+## 🎯 Recent Enhancements
+
+### Custom Categories Feature
+- Save frequently used label sets as reusable categories
+- Quick category selection when submitting custom classification jobs
+- Manage categories through the sidebar interface
+- Categories stored in session state (persists during app session)
+
+### Job History Feature
+- View complete job history with filtering and sorting
+- Filter by status and job type
+- Interactive job selection to view details
+- Access to job results and summaries
+- Backend API endpoint: `GET /jobs` with optional query parameters
+
 ## 📚 Next Steps
 
 - Add auto-scaling policies
 - Implement API authentication
 - Set up CI/CD pipeline
 - Configure monitoring dashboards
+- Persist custom categories to backend/database
+- Add job export functionality
 
 ---
 
 **No more manual Docker builds!** Just `terraform apply` and deploy. 🎉
+
+**Enhanced UI!** Use the Streamlit interface for a complete image classification workflow. 🖼️

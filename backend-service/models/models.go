@@ -93,3 +93,50 @@ type StatusMessage struct {
     Result  *ClassificationResult `json:"result,omitempty"`
     Error   string                `json:"error,omitempty"`
 }
+
+// UploadURLRequest represents the request to get a presigned upload URL
+type UploadURLRequest struct {
+    Filename    string `json:"filename" binding:"required"`
+    ContentType string `json:"content_type" binding:"required"`
+}
+
+// UploadURLResponse represents the response with presigned upload URL
+type UploadURLResponse struct {
+    UploadURL string    `json:"upload_url"`
+    S3Key     string    `json:"s3_key"`
+    ExpiresAt time.Time `json:"expires_at"`
+}
+
+// ImageInfo represents information about an image in S3
+type ImageInfo struct {
+    Key          string    `json:"key"`
+    Size         int64     `json:"size"`
+    LastModified time.Time `json:"last_modified"`
+}
+
+// ListImagesResponse represents the response with list of images
+type ListImagesResponse struct {
+    Images []ImageInfo `json:"images"`
+}
+
+// DeleteImageResponse represents the response for image deletion
+type DeleteImageResponse struct {
+    Success bool   `json:"success"`
+    Message string `json:"message"`
+}
+
+// JobSummary represents a simplified job for listing
+type JobSummary struct {
+    JobID       string     `json:"job_id"`
+    Status      string     `json:"status"`
+    JobType     string     `json:"job_type"`
+    CreatedAt   time.Time  `json:"created_at"`
+    CompletedAt *time.Time `json:"completed_at,omitempty"`
+    NumImages   int        `json:"num_images"`
+}
+
+// ListJobsResponse represents the response with list of jobs
+type ListJobsResponse struct {
+    Jobs  []JobSummary `json:"jobs"`
+    Total int          `json:"total"`
+}

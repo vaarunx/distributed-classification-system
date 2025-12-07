@@ -261,3 +261,5 @@ Thumbs.db
 tmp/
 *.log
 
+/images
+/ml-service/models_cache

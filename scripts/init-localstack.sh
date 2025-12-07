@@ -23,13 +23,8 @@ aws --endpoint-url=$AWS_ENDPOINT sqs create-queue --queue-name classification-st
 echo "Creating DynamoDB table..."
 aws --endpoint-url=$AWS_ENDPOINT dynamodb create-table \
     --table-name classification-jobs \
-    --attribute-definitions \
-        AttributeName=job_id,AttributeType=S \
-        AttributeName=status,AttributeType=S \
-        AttributeName=created_at,AttributeType=S \
+    --attribute-definitions AttributeName=job_id,AttributeType=S \
     --key-schema AttributeName=job_id,KeyType=HASH \
-    --global-secondary-indexes \
-        "IndexName=status-created-index,Keys=[{AttributeName=status,KeyType=HASH},{AttributeName=created_at,KeyType=RANGE}],Projection={ProjectionType=ALL},BillingMode=PAY_PER_REQUEST" \
     --billing-mode PAY_PER_REQUEST
 
 echo "LocalStack initialization complete!"
