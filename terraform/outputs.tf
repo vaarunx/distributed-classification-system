@@ -32,3 +32,29 @@ output "aws_resources" {
     status_queue   = module.queues.status_queue_name
   }
 }
+
+# Direct outputs for scripts
+output "cluster_name" {
+  description = "ECS cluster name"
+  value       = module.ecs_cluster.cluster_name
+}
+
+output "backend_service_name" {
+  description = "Backend ECS service name"
+  value       = module.ecs_cluster.backend_service_name
+}
+
+output "ml_service_name" {
+  description = "ML service ECS service name"
+  value       = module.ecs_cluster.ml_service_name
+}
+
+output "alb_resource_label" {
+  description = "ALB resource label for CloudWatch metrics (format: app/name/id)"
+  value       = module.load_balancer.alb_resource_label
+}
+
+output "target_group_resource_label" {
+  description = "Target group resource label for CloudWatch metrics (format: targetgroup/name/id)"
+  value       = module.load_balancer.target_group_resource_label
+}

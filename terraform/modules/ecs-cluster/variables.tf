@@ -109,3 +109,28 @@ variable "backend_target_group_arn" {
   type        = string
 }
 
+variable "alb_resource_label" {
+  description = "ALB resource label for autoscaling policies (format: app/name/id)"
+  type        = string
+}
+
+variable "target_group_resource_label" {
+  description = "Target group resource label for autoscaling policies (format: targetgroup/name/id)"
+  type        = string
+}
+
+variable "request_queue_name" {
+  description = "Request queue name for SQS autoscaling"
+  type        = string
+}
+
+variable "request_queue_arn" {
+  description = "Request queue ARN for CloudWatch alarms"
+  type        = string
+}
+
+variable "autoscaling_role_arn" {
+  description = "IAM role ARN for autoscaling (LabRole)"
+  type        = string
+}
+

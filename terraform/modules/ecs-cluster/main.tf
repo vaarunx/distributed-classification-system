@@ -225,3 +225,185 @@ resource "aws_ecs_service" "ml_service" {
 }
 
 data "aws_region" "current" {}
+
+# Backend Service Autoscaling Target
+resource "aws_appautoscaling_target" "backend" {
+  max_capacity       = 10000  # Effectively unlimited - no cap on tasks
+  min_capacity       = 1
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.backend.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+  role_arn           = var.autoscaling_role_arn
+
+  depends_on = [aws_ecs_service.backend]
+
+  # Add lifecycle to prevent role_arn changes (always use LabRole)
+  lifecycle {
+    # Ignore role_arn changes to prevent concurrent update errors
+    # LabRole is already configured correctly, no need to update
+    ignore_changes = [role_arn]
+  }
+}
+
+# Backend Service Autoscaling Policy - ALB Request Count
+resource "aws_appautoscaling_policy" "backend_request_count" {
+  name               = "${var.project_name}-backend-request-count-${var.environment}"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.backend.resource_id
+  scalable_dimension = aws_appautoscaling_target.backend.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.backend.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = 500.0  # Reduced from 1000.0 to trigger scaling at lower load
+    scale_in_cooldown  = 30     # Reduced from 60s for faster scale in
+    scale_out_cooldown = 10     # Reduced from 15s to match ML service faster scaling
+    disable_scale_in   = false
+
+    predefined_metric_specification {
+      predefined_metric_type = "ALBRequestCountPerTarget"
+      # Format: app/<alb-name>/<alb-id>/targetgroup/<tg-name>/<tg-id>
+      resource_label          = "${var.alb_resource_label}/${var.target_group_resource_label}"
+    }
+  }
+}
+
+# Backend Service Autoscaling Policy - Response Time
+# Note: ALBTargetResponseTime is not a valid predefined metric type for ECS autoscaling
+# Response time monitoring can be done via CloudWatch metrics and step scaling if needed
+# For now, using only ALBRequestCountPerTarget which is the primary scaling metric
+
+# ML Service Autoscaling Target
+resource "aws_appautoscaling_target" "ml_service" {
+  max_capacity       = 10000  # Effectively unlimited - no cap on tasks
+  min_capacity       = 1
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.ml_service.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+  role_arn           = var.autoscaling_role_arn
+
+  depends_on = [aws_ecs_service.ml_service]
+
+  # Add lifecycle to prevent role_arn changes (always use LabRole)
+  lifecycle {
+    # Ignore role_arn changes to prevent concurrent update errors
+    # LabRole is already configured correctly, no need to update
+    ignore_changes = [role_arn]
+  }
+}
+
+# ML Service Autoscaling Policy - SQS Queue Depth
+# CloudWatch alarms for queue depth
+resource "aws_cloudwatch_metric_alarm" "ml_service_queue_depth_high" {
+  alarm_name          = "${var.project_name}-ml-queue-depth-high-${var.environment}"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1      # Reduced from 2 for faster trigger
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 30     # Reduced from 60s for more responsive
+  statistic           = "Average"
+  threshold           = 300    # Reduced from 1000 to trigger earlier
+  alarm_description    = "Trigger scale out when SQS queue depth exceeds 300 messages"
+  alarm_actions       = [aws_appautoscaling_policy.ml_service_queue_scale_out.arn]
+
+  dimensions = {
+    QueueName = var.request_queue_name
+  }
+
+  depends_on = [aws_appautoscaling_policy.ml_service_queue_scale_out]
+
+  tags = {
+    Name        = "${var.project_name}-ml-queue-depth-high"
+    Environment = var.environment
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "ml_service_queue_depth_low" {
+  alarm_name          = "${var.project_name}-ml-queue-depth-low-${var.environment}"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2      # Reduced from 3 for faster trigger
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 30     # Reduced from 60s for more responsive
+  statistic           = "Average"
+  threshold           = 100     # Reduced from 500 to scale in earlier
+  alarm_description    = "Trigger scale in when SQS queue depth drops below 100 messages"
+  alarm_actions       = [aws_appautoscaling_policy.ml_service_queue_scale_in.arn]
+
+  dimensions = {
+    QueueName = var.request_queue_name
+  }
+
+  depends_on = [aws_appautoscaling_policy.ml_service_queue_scale_in]
+
+  tags = {
+    Name        = "${var.project_name}-ml-queue-depth-low"
+    Environment = var.environment
+  }
+}
+
+# Step scaling policy for scale out (queue depth high)
+# Uses multi-step scaling based on queue depth above threshold (300)
+# Intervals are relative to alarm threshold: threshold=300, so 0 = 300-1300, 1000 = 1300-10300, etc.
+resource "aws_appautoscaling_policy" "ml_service_queue_scale_out" {
+  name               = "${var.project_name}-ml-queue-scale-out-${var.environment}"
+  policy_type        = "StepScaling"
+  resource_id        = aws_appautoscaling_target.ml_service.resource_id
+  scalable_dimension = aws_appautoscaling_target.ml_service.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ml_service.service_namespace
+
+  step_scaling_policy_configuration {
+    adjustment_type         = "ChangeInCapacity"
+    cooldown                = 10     # Reduced from 15s for faster subsequent scaling
+    metric_aggregation_type  = "Average"
+
+    # Small queue (300-1,300 messages): add 2 tasks
+    step_adjustment {
+      metric_interval_lower_bound = 0
+      metric_interval_upper_bound = 1000
+      scaling_adjustment          = 2
+    }
+    
+    # Medium queue (1,300-10,300 messages): add 5 tasks
+    step_adjustment {
+      metric_interval_lower_bound = 1000
+      metric_interval_upper_bound = 10000
+      scaling_adjustment          = 5
+    }
+    
+    # Large queue (10,300-50,300 messages): add 10 tasks
+    step_adjustment {
+      metric_interval_lower_bound = 10000
+      metric_interval_upper_bound = 50000
+      scaling_adjustment          = 10
+    }
+    
+    # Very large queue (50,300+ messages): add 20 tasks
+    step_adjustment {
+      metric_interval_lower_bound = 50000
+      scaling_adjustment          = 20
+    }
+  }
+}
+
+# Step scaling policy for scale in (queue depth low)
+resource "aws_appautoscaling_policy" "ml_service_queue_scale_in" {
+  name               = "${var.project_name}-ml-queue-scale-in-${var.environment}"
+  policy_type        = "StepScaling"
+  resource_id        = aws_appautoscaling_target.ml_service.resource_id
+  scalable_dimension = aws_appautoscaling_target.ml_service.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ml_service.service_namespace
+
+  step_scaling_policy_configuration {
+    adjustment_type         = "ChangeInCapacity"
+    cooldown                = 30     # Reduced from 60s for faster scale in
+    metric_aggregation_type  = "Average"
+
+    step_adjustment {
+      metric_interval_upper_bound = 0
+      scaling_adjustment          = -1  # Remove 1 task when queue depth < 100
+    }
+  }
+}
+
+# ML Service Autoscaling Policy - CPU removed
+# Now using only queue depth autoscaling for ML service

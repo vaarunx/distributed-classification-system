@@ -261,5 +261,48 @@ Thumbs.db
 tmp/
 *.log
 
+# Project-specific
 /images
 /ml-service/models_cache
+
+# Load test results and reports
+load-tests/results/
+load-tests/reports/
+load-tests/aws-screenshots/
+
+# Generated files
+s3_keys.json
+upload_checkpoint.json
+
+# Root-level reports and results
+reports/
+results/
+
+# Cursor IDE
+.cursor/
+
+# LocalStack data
+tmp/localstack/
+
+# Images - ignore all image files
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.tif
+*.webp
+*.svg
+*.ico
+*.heic
+*.heif
+# Allow specific test image if needed (uncomment to allow)
+# !ml-service/test/test.jpg
+
+# Terraform backup files
+*.tfvars.backup
+
+# AWS credentials (if accidentally committed)
+.aws/
+aws-credentials

@@ -66,9 +66,46 @@ if [ "$confirm" != "yes" ]; then
     exit 0
 fi
 
-# Apply
+# Apply with retry logic for concurrent update errors
 echo -e "${YELLOW}Applying Terraform configuration...${NC}"
-terraform apply -auto-approve
+
+MAX_RETRIES=3
+RETRY_DELAY=30
+RETRY_COUNT=0
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    if terraform apply -auto-approve; then
+        echo ""
+        break
+    else
+        EXIT_CODE=$?
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        
+        # Check if error is related to concurrent updates
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            echo -e "${YELLOW}⚠ Deployment failed. Checking for concurrent autoscaling updates...${NC}"
+            
+            # Wait for autoscaling to be ready if the wait script exists
+            if [ -f "$SCRIPT_DIR/wait-for-autoscaling-ready.sh" ]; then
+                echo -e "${YELLOW}Waiting for autoscaling targets to stabilize...${NC}"
+                "$SCRIPT_DIR/wait-for-autoscaling-ready.sh" || true
+            else
+                echo -e "${YELLOW}Waiting ${RETRY_DELAY}s before retry ${RETRY_COUNT}/${MAX_RETRIES}...${NC}"
+                sleep $RETRY_DELAY
+            fi
+            
+            echo -e "${YELLOW}Retrying deployment...${NC}"
+        else
+            echo -e "${RED}✗ Deployment failed after ${MAX_RETRIES} attempts${NC}"
+            echo -e "${YELLOW}If you see ConcurrentUpdateException errors, try:${NC}"
+            echo "  1. Wait 1-2 minutes for autoscaling actions to complete"
+            echo "  2. Run: ./scripts/wait-for-autoscaling-ready.sh"
+            echo "  3. Retry: terraform apply"
+            exit $EXIT_CODE
+        fi
+    fi
+done
+
 echo ""
 
 # Get outputs
