@@ -1,0 +1,50 @@
+"""Test scenario: Throughput scaling curve"""
+import logging
+from locust import HttpUser, task, between
+import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from utils.image_manager import get_image_manager
+
+logger = logging.getLogger(__name__)
+
+
+class ThroughputScalingUser(HttpUser):
+    """User for throughput scaling test"""
+    wait_time = between(0.1, 0.3)  # Reduced RPS for lower load
+    
+    def on_start(self):
+        """Initialize on user start"""
+        self.image_manager = get_image_manager()
+        self.job_ids = []
+    
+    @task
+    def submit_job(self):
+        """Submit classification job"""
+        try:
+            s3_keys = self.image_manager.get_s3_keys_for_job()
+            
+            job_data = {
+                "job_type": "image_classification",
+                "s3_keys": s3_keys,
+                "top_k": 5,
+                "confidence_threshold": 0.5
+            }
+            
+            response = self.client.post(
+                "/submit",
+                json=job_data,
+                name="/submit"
+            )
+            
+            if response.status_code == 202:
+                result = response.json()
+                job_id = result.get("job_id")
+                if job_id:
+                    self.job_ids.append(job_id)
+        except Exception as e:
+            logger.error(f"Error submitting job: {str(e)}")
+

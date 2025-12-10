@@ -118,6 +118,15 @@ module "ecs_cluster" {
   
   # Load Balancer
   backend_target_group_arn    = module.load_balancer.backend_target_group_arn
+  alb_resource_label          = module.load_balancer.alb_resource_label
+  target_group_resource_label = module.load_balancer.target_group_resource_label
+  
+  # Queues
+  request_queue_name          = module.queues.request_queue_name
+  request_queue_arn          = module.queues.request_queue_arn
+  
+  # Autoscaling
+  autoscaling_role_arn        = data.aws_iam_role.lab_role.arn
   
   depends_on = [
     module.container_registry,

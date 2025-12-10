@@ -40,6 +40,10 @@ func main() {
 	router.POST("/submit", handler.SubmitJob)
 	router.GET("/status/:jobId", handler.GetJobStatus)
 	router.GET("/result/:jobId", handler.GetJobResult)
+	router.GET("/jobs", handler.ListJobs)
+	router.POST("/upload-url", handler.GetUploadURL)
+	router.GET("/images", handler.ListImages)
+	router.DELETE("/images/*filepath", handler.DeleteImage)
 
 	// Server configuration
 	srv := &http.Server{

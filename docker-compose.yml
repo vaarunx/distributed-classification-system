@@ -15,8 +15,8 @@ services:
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-east-1
-    volumes:
-      - "./tmp/localstack:/tmp/localstack"
+    # volumes:
+    #   - "./tmp/localstack:/tmp/localstack/data"
     networks:
       - classifier-network
 
@@ -66,6 +66,20 @@ services:
       - classifier-network
     volumes:
       - "./ml-service/models_cache:/root/.cache/huggingface"
+
+  # Streamlit app
+  streamlit-app:
+    build:
+      context: ./streamlit-app
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      - BACKEND_API_URL=http://backend:8080
+    depends_on:
+      - backend
+    networks:
+      - classifier-network
 
 networks:
   classifier-network:

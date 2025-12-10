@@ -1,0 +1,9 @@
+locust>=2.0.0
+boto3>=1.28.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+matplotlib>=3.5.0
+seaborn>=0.12.0
+pandas>=1.5.0
+numpy>=1.23.0
+
