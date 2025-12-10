@@ -1544,13 +1544,16 @@ def plot_performance_degradation(
 # Main Generation Function
 # ============================================================================
 
-def generate_all_graphs(
+def generate_graphs_for_test(
     locust_csv: Optional[str] = None,
     cloudwatch_json: Optional[str] = None,
     test_name: Optional[str] = None
 ):
-    """Generate essential metric graphs from test results"""
-    logger.info("Generating essential metric graphs...")
+    """Generate essential metric graphs for a specific test"""
+    if not test_name and locust_csv:
+        test_name = Path(locust_csv).stem.replace("_stats", "").replace("_stats_history", "")
+    
+    logger.info(f"Generating graphs for test: {test_name}")
     
     metrics = {}
     locust_df = pd.DataFrame()
@@ -1567,24 +1570,99 @@ def generate_all_graphs(
     if not locust_df.empty and metrics:
         locust_df, metrics = align_timestamps(locust_df, metrics)
     
-    # Generate only essential metric graphs (no test-specific metadata)
+    # Generate graphs with test name in filename
+    output_prefix = f"{test_name}_" if test_name else ""
+    
     # 1. Latency - Most critical for user experience
-    plot_latency_over_time(locust_df, locust_stats_history, metrics, test_name=None)
+    plot_latency_over_time(locust_df, locust_stats_history, metrics, 
+                          output_file=f"{output_prefix}latency_over_time.png", 
+                          test_name=test_name)
     
     # 2. Throughput & Scaling - System capacity and scalability
-    plot_throughput_vs_task_count(metrics, locust_df, test_name=None)
-    plot_autoscaling_response(metrics, test_name=None)
+    plot_throughput_vs_task_count(metrics, locust_df, 
+                                 output_file=f"{output_prefix}throughput_vs_tasks.png", 
+                                 test_name=test_name)
+    plot_autoscaling_response(metrics, 
+                             output_file=f"{output_prefix}autoscaling_response.png", 
+                             test_name=test_name)
     
     # 3. Error Rate - System reliability
-    plot_error_rate_over_time(metrics, locust_stats_history, test_name=None)
+    plot_error_rate_over_time(metrics, locust_stats_history, 
+                             output_file=f"{output_prefix}error_rate_over_time.png", 
+                             test_name=test_name)
     
-    # 4. Queue Health - System backlog and processing
-    plot_queue_depth_over_time(metrics, test_name=None)
+    # 4. Resource Utilization - System efficiency
+    plot_resource_utilization(metrics, 
+                            output_file=f"{output_prefix}resource_utilization.png", 
+                            test_name=test_name)
     
-    # 5. Resource Utilization - System efficiency
-    plot_resource_utilization(metrics, test_name=None)
+    logger.info(f"Graph generation complete for test: {test_name}")
+
+
+def generate_all_graphs(
+    locust_csv: Optional[str] = None,
+    cloudwatch_json: Optional[str] = None,
+    test_name: Optional[str] = None
+):
+    """Generate graphs for all available tests or a single test"""
+    results_dir = Path(RESULTS_DIR)
     
-    logger.info("Essential metric graph generation complete")
+    # If specific files provided, generate for that test only
+    if locust_csv or cloudwatch_json:
+        generate_graphs_for_test(locust_csv, cloudwatch_json, test_name)
+        return
+    
+    # Otherwise, find all test results and generate graphs for each
+    logger.info("Finding all test results and generating graphs per test type...")
+    
+    # Find all unique test names from results (match by test name, not timestamp)
+    test_files = {}
+    
+    # Find all stats CSV files with timestamp pattern (exclude exceptions, failures)
+    for csv_file in results_dir.glob("*_stats.csv"):
+        # Skip if it's stats_history (we'll use stats.csv)
+        if "_stats_history" in csv_file.name:
+            continue
+        
+        # Pattern: testname_YYYYMMDD_HHMMSS_stats.csv
+        # Extract base test name (before first timestamp)
+        name_with_timestamp = csv_file.stem.replace("_stats", "")
+        # Extract base test name by removing timestamp pattern (YYYYMMDD_HHMMSS)
+        import re
+        base_test_name = re.sub(r'_\d{8}_\d{6}$', '', name_with_timestamp)
+        
+        # Use the full timestamped name as the key, but store base name
+        if name_with_timestamp not in test_files:
+            test_files[name_with_timestamp] = {"base_name": base_test_name}
+        test_files[name_with_timestamp]["locust_csv"] = str(csv_file)
+    
+    # Find all metrics JSON files with timestamp pattern (exclude state files)
+    for json_file in results_dir.glob("*_metrics_*.json"):
+        # Skip state files
+        if "_state.json" in json_file.name:
+            continue
+        
+        # Pattern: testname_metrics_YYYYMMDD_HHMMSS.json
+        parts = json_file.stem.split("_metrics_")
+        if len(parts) == 2:
+            base_test_name = parts[0]
+            metrics_timestamp = parts[1]
+            
+            # Find matching CSV file by base test name
+            for test_key, test_data in test_files.items():
+                if test_data.get("base_name") == base_test_name:
+                    test_files[test_key]["cloudwatch_json"] = str(json_file)
+                    break
+    
+    # Generate graphs for each test
+    for test_name, files in test_files.items():
+        generate_graphs_for_test(
+            files.get("locust_csv"),
+            files.get("cloudwatch_json"),
+            test_name
+        )
+    
+    logger.info(f"Generated graphs for {len(test_files)} test(s)")
 
 
 if __name__ == "__main__":

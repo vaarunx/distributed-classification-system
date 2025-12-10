@@ -1,32 +1,97 @@
-# Setup Guide - Distributed Image Classification System
+# Complete Setup Guide - Distributed Image Classification System
 
-This guide will walk you through cloning the repository, deploying the AWS infrastructure, and running the Streamlit dashboard.
+This comprehensive guide will walk you through setting up and deploying the entire distributed image classification system from a **completely fresh system** with no prior setup.
 
 ## Table of Contents
 
-1. [Prerequisites Installation](#1-prerequisites-installation)
-2. [AWS Account Setup](#2-aws-account-setup)
-3. [Repository Setup](#3-repository-setup)
-4. [Project File Structure & Purpose](#4-project-file-structure--purpose)
-5. [Infrastructure Deployment](#5-infrastructure-deployment)
-6. [Running the Dashboard](#6-running-the-dashboard)
-7. [Running Tests](#7-running-tests)
-8. [Verification & Testing](#8-verification--testing)
-9. [Troubleshooting](#9-troubleshooting)
+1. [System Requirements](#1-system-requirements)
+2. [Prerequisites Installation](#2-prerequisites-installation)
+3. [AWS Account Setup](#3-aws-account-setup)
+4. [Repository Setup](#4-repository-setup)
+5. [Understanding the Project Structure](#5-understanding-the-project-structure)
+6. [Infrastructure Deployment](#6-infrastructure-deployment)
+7. [Running the Dashboard](#7-running-the-dashboard)
+8. [Testing the System](#8-testing-the-system)
+9. [Load Testing](#9-load-testing)
+10. [Troubleshooting](#10-troubleshooting)
+11. [Cleanup](#11-cleanup)
 
 ---
 
-## 1. Prerequisites Installation
+## 1. System Requirements
 
-Before you begin, you need to install and configure the following tools:
+### Operating System
+- **Windows 10/11** (64-bit)
+- **macOS** (10.15 or later)
+- **Linux** (Ubuntu 20.04+ or similar)
 
-### 1.1 AWS CLI
+### Hardware Requirements
+- **CPU:** 2+ cores recommended
+- **RAM:** 8GB minimum, 16GB recommended
+- **Storage:** 20GB free space (for Docker images, dependencies, and models)
+- **Network:** Stable internet connection for AWS services and model downloads
 
-**Installation:**
+### Software Requirements
+- Git (for cloning repository)
+- Terminal/Command Prompt access
+- Administrator/root access (for some installations)
 
-- **Windows:** Download the MSI installer from [AWS CLI Downloads](https://aws.amazon.com/cli/)
-- **macOS:** `brew install awscli`
-- **Linux:** `sudo apt-get install awscli` or `sudo yum install awscli`
+---
+
+## 2. Prerequisites Installation
+
+### 2.1 Install Git
+
+**Windows:**
+- Download from [Git for Windows](https://git-scm.com/download/win)
+- Run installer with default options
+- Verify: `git --version`
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install git
+
+# Or download from https://git-scm.com/download/mac
+```
+
+**Linux:**
+```bash
+sudo apt-get update
+sudo apt-get install git
+```
+
+**Verify installation:**
+```bash
+git --version
+# Should output: git version 2.x.x or higher
+```
+
+### 2.2 Install AWS CLI
+
+**Windows:**
+1. Download MSI installer from [AWS CLI Downloads](https://aws.amazon.com/cli/)
+2. Run the installer
+3. Follow installation wizard
+
+**macOS:**
+```bash
+# Using Homebrew (recommended)
+brew install awscli
+
+# Or using pip
+pip3 install awscli
+```
+
+**Linux:**
+```bash
+# Using package manager
+sudo apt-get update
+sudo apt-get install awscli
+
+# Or using pip
+pip3 install --user awscli
+```
 
 **Verify installation:**
 ```bash
@@ -34,13 +99,30 @@ aws --version
 # Should output: aws-cli/2.x.x
 ```
 
-### 1.2 Terraform
+### 2.3 Install Terraform
 
-**Installation:**
+**Windows:**
+1. Download from [Terraform Downloads](https://www.terraform.io/downloads)
+2. Extract ZIP file
+3. Add Terraform directory to PATH environment variable
+   - Or use Chocolatey: `choco install terraform`
 
-- **Windows:** Download from [Terraform Downloads](https://www.terraform.io/downloads) or use `choco install terraform`
-- **macOS:** `brew install terraform`
-- **Linux:** Download from [Terraform Downloads](https://www.terraform.io/downloads)
+**macOS:**
+```bash
+# Using Homebrew (recommended)
+brew install terraform
+
+# Or download manually from https://www.terraform.io/downloads
+```
+
+**Linux:**
+```bash
+# Download and install
+wget https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip
+unzip terraform_1.6.0_linux_amd64.zip
+sudo mv terraform /usr/local/bin/
+rm terraform_1.6.0_linux_amd64.zip
+```
 
 **Verify installation:**
 ```bash
@@ -48,317 +130,471 @@ terraform version
 # Should output: Terraform v1.0.0 or higher
 ```
 
-### 1.3 Docker
+### 2.4 Install Docker
 
-**Installation:**
+**Windows/macOS:**
+1. Download [Docker Desktop](https://www.docker.com/products/docker-desktop)
+2. Install and start Docker Desktop
+3. Ensure Docker Desktop is running (check system tray/Applications)
 
-- **Windows/macOS:** Download [Docker Desktop](https://www.docker.com/products/docker-desktop)
-- **Linux:** Follow [Docker Engine installation guide](https://docs.docker.com/engine/install/)
+**Linux:**
+```bash
+# Follow official guide: https://docs.docker.com/engine/install/
+# For Ubuntu/Debian:
+sudo apt-get update
+sudo apt-get install docker.io
+sudo systemctl start docker
+sudo systemctl enable docker
+
+# Add user to docker group (optional, to run without sudo)
+sudo usermod -aG docker $USER
+# Log out and back in for group change to take effect
+```
 
 **Verify installation:**
 ```bash
 docker --version
 docker ps
-# Docker daemon should be running
+# Docker daemon should be running (no errors)
 ```
 
-### 1.4 Python 3.x
+**Important:** Docker must be running before deploying infrastructure, as Terraform will build Docker images locally.
 
-**Installation:**
+### 2.5 Install Python 3.x
 
-- **Windows:** Download from [Python Downloads](https://www.python.org/downloads/)
-- **macOS:** `brew install python3`
-- **Linux:** `sudo apt-get install python3 python3-pip`
+**Windows:**
+1. Download from [Python Downloads](https://www.python.org/downloads/)
+2. **Important:** Check "Add Python to PATH" during installation
+3. Install Python 3.11 or higher
+
+**macOS:**
+```bash
+# Using Homebrew (recommended)
+brew install python3
+
+# Or download from https://www.python.org/downloads/macos/
+```
+
+**Linux:**
+```bash
+sudo apt-get update
+sudo apt-get install python3 python3-pip
+```
 
 **Verify installation:**
 ```bash
 python3 --version
+# Should output: Python 3.11.x or higher
+pip3 --version
+# Should output: pip 23.x.x or higher
+```
+
+### 2.6 Verify All Prerequisites
+
+Run this checklist to verify everything is installed:
+
+```bash
+# Check Git
+git --version
+
+# Check AWS CLI
+aws --version
+
+# Check Terraform
+terraform version
+
+# Check Docker
+docker --version
+docker ps  # Should not error
+
+# Check Python
+python3 --version
 pip3 --version
 ```
 
+All commands should execute without errors.
+
 ---
 
-## 2. AWS Account Setup
+## 3. AWS Account Setup
 
-### 2.1 AWS Account Requirements
+### 3.1 Create AWS Account
 
-- An active AWS account
-- Appropriate IAM permissions to create:
-  - ECS clusters and services
-  - ECR repositories
-  - S3 buckets
-  - SQS queues
-  - DynamoDB tables
-  - VPC, subnets, security groups
-  - Application Load Balancer
-  - IAM roles and policies
-  - CloudWatch logs
+If you don't have an AWS account:
+1. Go to [AWS Sign Up](https://aws.amazon.com/)
+2. Create a new account (requires credit card, but free tier available)
+3. Complete account verification
 
-### 2.2 Configure AWS CLI Credentials
+### 3.2 AWS Account Requirements
 
-Run the following command and follow the prompts:
+Your AWS account needs permissions to create:
+- **ECS** (Elastic Container Service) - clusters, services, task definitions
+- **ECR** (Elastic Container Registry) - repositories for Docker images
+- **S3** (Simple Storage Service) - buckets for input/output images
+- **SQS** (Simple Queue Service) - queues for job processing
+- **DynamoDB** - table for job tracking
+- **VPC** (Virtual Private Cloud) - networking (subnets, security groups)
+- **Application Load Balancer (ALB)** - load balancing
+- **IAM** (Identity and Access Management) - roles and policies
+- **CloudWatch** - logging and monitoring
+- **Application Auto Scaling** - autoscaling policies
+
+### 3.3 Configure AWS CLI Credentials
+
+**Option 1: Using AWS CLI (Recommended)**
 
 ```bash
 aws configure
 ```
 
-You'll be asked for:
+You'll be prompted for:
 - **AWS Access Key ID:** Your AWS access key
 - **AWS Secret Access Key:** Your AWS secret key
 - **Default region name:** `us-east-1` (or your preferred region)
 - **Default output format:** `json`
 
-**Verify configuration:**
+**To get AWS credentials:**
+1. Log into [AWS Console](https://console.aws.amazon.com/)
+2. Go to IAM → Users → Your User → Security Credentials
+3. Click "Create Access Key"
+4. Choose "Command Line Interface (CLI)"
+5. Download or copy the Access Key ID and Secret Access Key
+
+**Option 2: Using Environment Variables**
+
+```bash
+# Windows (PowerShell)
+$env:AWS_ACCESS_KEY_ID="your-access-key"
+$env:AWS_SECRET_ACCESS_KEY="your-secret-key"
+$env:AWS_DEFAULT_REGION="us-east-1"
+
+# macOS/Linux
+export AWS_ACCESS_KEY_ID="your-access-key"
+export AWS_SECRET_ACCESS_KEY="your-secret-key"
+export AWS_DEFAULT_REGION="us-east-1"
+```
+
+**Verify AWS configuration:**
 ```bash
 aws sts get-caller-identity
 # Should output your AWS account ID and user ARN
 ```
 
-### 2.3 IAM Role (Optional)
+### 3.4 IAM Role Configuration
 
-If you're using a lab environment with a pre-configured IAM role (e.g., `LabRole`), ensure it has the necessary permissions. The Terraform configuration will use this role if available.
+The Terraform configuration expects an IAM role named `LabRole` (common in AWS lab environments). If you're using a different setup:
+
+1. **If you have a pre-configured IAM role:**
+   - The Terraform configuration will automatically use it
+   - Ensure it has the necessary permissions listed above
+
+2. **If you need to create IAM permissions:**
+   - The role needs permissions for all AWS services listed in section 3.2
+   - You can use AWS managed policies or create custom policies
+   - Common policies needed:
+     - `AmazonECS_FullAccess`
+     - `AmazonEC2ContainerRegistryFullAccess`
+     - `AmazonS3FullAccess`
+     - `AmazonSQSFullAccess`
+     - `AmazonDynamoDBFullAccess`
+     - `ElasticLoadBalancingFullAccess`
+     - `IAMFullAccess` (for creating service roles)
+
+**Note:** For production, use least-privilege IAM policies. The above are for development/testing.
 
 ---
 
-## 3. Repository Setup
+## 4. Repository Setup
 
-### 3.1 Clone the Repository
+### 4.1 Clone the Repository
 
 ```bash
+# Navigate to your desired directory
+cd ~/Desktop  # or wherever you want the project
+
+# Clone the repository (replace with actual URL)
 git clone <repository-url>
 cd distributed-classification-system/distributed-classification-system
 ```
 
-Replace `<repository-url>` with the actual Git repository URL.
+**If you don't have the repository URL:**
+- Contact your project administrator
+- Or if this is a local project, navigate to the project directory directly
 
-### 3.2 Verify Repository Structure
+### 4.2 Verify Repository Structure
 
-You should see the following main directories:
+After cloning, you should see this structure:
 
 ```
 distributed-classification-system/
-├── backend-service/      # Go backend API service
-├── ml-service/           # Python ML classification service
-├── streamlit-app/         # Streamlit web dashboard
-├── terraform/             # Infrastructure as Code
-├── scripts/               # Utility scripts
-├── load-tests/            # Load testing infrastructure
-├── docker-compose.yml     # Local development setup
-└── README.md              # Project overview
+├── backend-service/          # Go backend API service
+│   ├── main.go
+│   ├── handlers/
+│   ├── services/
+│   ├── config/
+│   ├── models/
+│   ├── Dockerfile
+│   └── go.mod
+├── ml-service/                # Python ML classification service
+│   ├── main.py
+│   ├── sqs_worker.py
+│   ├── controllers/
+│   ├── models/
+│   ├── schemas/
+│   ├── Dockerfile
+│   └── requirements.txt
+├── streamlit-app/             # Streamlit web dashboard
+│   ├── app.py
+│   ├── utils/
+│   ├── Dockerfile
+│   └── requirements.txt
+├── terraform/                 # Infrastructure as Code
+│   ├── main.tf
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── modules/
+│       ├── container-registry/
+│       ├── networking/
+│       ├── storage/
+│       ├── queues/
+│       ├── load-balancer/
+│       └── ecs-cluster/
+├── scripts/                   # Utility scripts
+│   ├── deploy.sh
+│   ├── run-streamlit.sh
+│   ├── test-api.sh
+│   └── ... (other scripts)
+├── load-tests/                # Load testing infrastructure
+│   ├── locustfile.py
+│   ├── test_scenarios/
+│   └── requirements.txt
+├── docker-compose.yml         # Local development setup
+├── README.md                  # Project overview
+└── SETUP.md                   # This file
 ```
+
+If the structure looks different, verify you're in the correct directory.
 
 ---
 
-## 4. Project File Structure & Purpose
+## 5. Understanding the Project Structure
 
-Understanding the project structure will help you navigate and work with the codebase.
+### 5.1 Core Services
 
-### 4.1 Core Service Directories
+#### Backend Service (`backend-service/`)
+- **Language:** Go
+- **Purpose:** REST API that handles:
+  - Job submission and status tracking
+  - Image upload management (presigned URLs)
+  - Integration with AWS services (S3, SQS, DynamoDB)
+- **Key Files:**
+  - `main.go` - HTTP server and routing
+  - `handlers/handlers.go` - API endpoint handlers
+  - `services/` - AWS service clients (S3, SQS, DynamoDB)
+  - `config/config.go` - Configuration management
 
-#### `backend-service/`
-**Purpose:** Go-based REST API that handles job submission, status tracking, and image management.
+#### ML Service (`ml-service/`)
+- **Language:** Python (FastAPI)
+- **Purpose:** Processes classification jobs from SQS queue
+- **Models Supported:**
+  - **MobileNetV2:** ImageNet classification (1000 classes)
+  - **CLIP:** Custom label classification
+- **Key Files:**
+  - `main.py` - FastAPI application
+  - `sqs_worker.py` - SQS queue worker
+  - `controllers/classification_controller.py` - ML model controllers
+  - `models/` - Model implementations (MobileNet, CLIP)
 
-**Key Files:**
-- `main.go` - Entry point, sets up HTTP server and routes
-- `handlers/handlers.go` - HTTP request handlers (submit, status, result, etc.)
-- `services/` - AWS service integrations (S3, SQS, DynamoDB)
-- `config/config.go` - Configuration loading from environment variables
-- `Dockerfile` - Container image definition for backend service
+#### Streamlit App (`streamlit-app/`)
+- **Language:** Python (Streamlit)
+- **Purpose:** Web-based dashboard for:
+  - Uploading images to S3
+  - Submitting classification jobs
+  - Monitoring job status
+  - Viewing results
+  - Managing image gallery
+- **Key Files:**
+  - `app.py` - Main Streamlit application
+  - `utils/api_client.py` - Backend API client
+  - `utils/s3_client.py` - S3 upload utilities
 
-#### `ml-service/`
-**Purpose:** Python FastAPI service that processes classification jobs from SQS queue.
+### 5.2 Infrastructure (Terraform)
 
-**Key Files:**
-- `main.py` - FastAPI application entry point
-- `sqs_worker.py` - SQS queue worker that processes jobs
-- `controllers/classification_controller.py` - ML model controllers (MobileNet, CLIP)
-- `models/` - ML model implementations
-- `requirements.txt` - Python dependencies
-- `Dockerfile` - Container image definition for ML service
+#### Terraform Modules
 
-#### `streamlit-app/`
-**Purpose:** Web-based dashboard for uploading images, submitting jobs, and viewing results.
+**`container-registry/`**
+- Creates ECR repositories
+- **Automatically builds Docker images** from source code
+- Pushes images to ECR
+- No manual Docker commands needed!
 
-**Key Files:**
-- `app.py` - Main Streamlit application
-- `utils/api_client.py` - Backend API client wrapper
-- `utils/s3_client.py` - S3 upload utilities
-- `requirements.txt` - Python dependencies (Streamlit, requests, boto3, etc.)
-- `Dockerfile` - Container image definition for Streamlit app
+**`networking/`**
+- Creates VPC with public/private subnets
+- Security groups for ALB and ECS services
+- Internet gateway and NAT gateway
 
-### 4.2 Infrastructure Directory
+**`storage/`**
+- S3 buckets (input and output)
+- DynamoDB table for job tracking
 
-#### `terraform/`
-**Purpose:** Infrastructure as Code - defines all AWS resources.
+**`queues/`**
+- SQS queues (request queue and status queue)
 
-**Key Files:**
-- `main.tf` - Root Terraform configuration, module declarations
-- `variables.tf` - Input variables (project name, region, resource sizes)
-- `outputs.tf` - Output values (ALB endpoint, cluster names, etc.)
-- `modules/` - Reusable Terraform modules:
-  - `container-registry/` - ECR repositories and Docker image builds
-  - `networking/` - VPC, subnets, security groups
-  - `storage/` - S3 buckets and DynamoDB tables
-  - `queues/` - SQS queues
-  - `load-balancer/` - Application Load Balancer
-  - `ecs-cluster/` - ECS cluster and services
+**`load-balancer/`**
+- Application Load Balancer (ALB)
+- Target groups for backend service
+- Health checks
 
-### 4.3 Scripts Directory
+**`ecs-cluster/`**
+- ECS cluster
+- Backend service task definition and service
+- ML service task definition and service
+- Autoscaling policies
+- IAM roles for services
 
-#### `scripts/`
-**Purpose:** Utility scripts for deployment, testing, and management.
+### 5.3 Scripts Directory
 
-**Deployment Scripts:**
-- `deploy.sh` - Main deployment script (runs terraform init, plan, apply)
-- `destroy.sh` - Teardown script (runs terraform destroy)
+**Deployment:**
+- `deploy.sh` - Main deployment script (Terraform init, plan, apply)
+- `destroy.sh` - Teardown infrastructure
 
 **Service Management:**
-- `scale-backend-service.sh <count>` - Scale backend ECS service to target count
-- `scale-ml-service.sh <count>` - Scale ML ECS service to target count
-- `manage-autoscaling.sh <status>` - Suspend/resume autoscaling (status: suspend/resume)
+- `scale-backend-service.sh <count>` - Scale backend service
+- `scale-ml-service.sh <count>` - Scale ML service
+- `manage-autoscaling.sh <status>` - Suspend/resume autoscaling
 
-**Testing Scripts:**
-- `test-api.sh [endpoint]` - Basic API endpoint tests
-- `test-deployment.sh` - End-to-end deployment verification
-- `health-check.sh` - Quick health check of deployed services
-- `run-all-tests.sh` - Run all load tests sequentially
-- `run-load-test.sh <test_name>` - Run a specific load test scenario
+**Testing:**
+- `test-api.sh [endpoint]` - Test API endpoints
+- `test-deployment.sh` - End-to-end deployment test
+- `health-check.sh` - Quick health check
 
 **Dashboard:**
 - `run-streamlit.sh` - Launch Streamlit dashboard locally
 
-**Utilities:**
-- `pre-upload-images.sh` / `pre-upload-images.py` - Upload test images to S3
-- `collect-metrics.py` - Collect CloudWatch metrics during tests
-- `generate-report.sh` - Generate test reports and graphs
-- `wait-for-queue-empty.sh` - Wait for SQS queue to clear
-- `wait-for-autoscaling-ready.sh` - Wait for autoscaling to stabilize
-
-### 4.4 Configuration Files
-
-#### `docker-compose.yml`
-**Purpose:** Local development setup using LocalStack (AWS service emulator).
-
-**Usage:** Run services locally without AWS:
-```bash
-docker-compose up
-```
-
-#### `s3_keys.json`
-**Purpose:** Mapping file of uploaded test images (generated by pre-upload scripts).
-
-#### `terraform/terraform.tfvars` (optional)
-**Purpose:** Custom Terraform variable values. If not present, defaults from `variables.tf` are used.
-
-**Example:**
-```hcl
-project_name = "my-classifier"
-environment  = "dev"
-backend_cpu  = 512
-backend_memory = 1024
-ml_cpu = 2048
-ml_memory = 8192
-```
-
-### 4.5 Load Testing Directory
-
-#### `load-tests/`
-**Purpose:** Locust-based load testing infrastructure.
-
-**Key Files:**
-- `locustfile.py` - Locust test scenarios
-- `test_scenarios/` - Individual test scenario definitions:
-  - `autoscaling_response.py` - Test autoscaling response time
-  - `queue_explosion.py` - Test queue depth handling
-  - `sustained_load.py` - Test sustained load stability
-  - `throughput_scaling.py` - Test throughput scaling curve
-- `analysis/` - Test result analysis and graph generation
-- `config.py` - Load test configuration
-- `requirements.txt` - Python dependencies for load tests
+**Load Testing:**
+- `run-load-test.sh <test_name>` - Run specific load test
+- `run-all-tests.sh` - Run all load tests sequentially
+- `pre-upload-images.sh` - Upload test images to S3
+- `generate-report.sh` - Generate test reports
 
 ---
 
-## 5. Infrastructure Deployment
+## 6. Infrastructure Deployment
 
-### 5.1 Quick Deployment (Recommended)
+### 6.1 Quick Deployment (Recommended)
 
 Use the provided deployment script:
 
 ```bash
+# From project root
 ./scripts/deploy.sh
 ```
 
-This script will:
-1. Check prerequisites (Terraform, AWS CLI, Docker)
-2. Verify AWS credentials
-3. Initialize Terraform
-4. Run `terraform plan`
-5. Ask for confirmation
-6. Run `terraform apply`
-7. Wait for services to be healthy
-8. Display deployment outputs
+**What the script does:**
+1. Checks prerequisites (Terraform, AWS CLI, Docker)
+2. Verifies AWS credentials
+3. Initializes Terraform
+4. Runs `terraform plan` (shows what will be created)
+5. Asks for confirmation
+6. Runs `terraform apply` (creates all resources)
+7. Waits for services to be healthy
+8. Displays deployment outputs
 
-### 5.2 Manual Deployment
+**Expected Duration:** 10-15 minutes (first deployment)
 
-If you prefer to deploy manually:
+### 6.2 Manual Deployment
+
+If you prefer manual control:
 
 ```bash
 cd terraform
 
-# Initialize Terraform
+# Initialize Terraform (downloads providers)
 terraform init
 
-# Review the deployment plan
+# Review what will be created
 terraform plan
 
-# Apply the configuration (creates all AWS resources)
+# Apply configuration (creates all AWS resources)
 terraform apply
 ```
 
 When prompted, type `yes` to confirm.
 
-### 5.3 What Happens During Deployment
+### 6.3 What Happens During Deployment
 
-Terraform will automatically:
+Terraform automatically:
 
-1. **Create ECR Repositories** - Container registries for backend and ML service images
-2. **Build Docker Images** - Builds images locally from `backend-service/` and `ml-service/`
-3. **Push to ECR** - Uploads images to AWS ECR
-4. **Create Networking** - VPC, subnets, security groups
-5. **Create Storage** - S3 buckets (input/output) and DynamoDB table
-6. **Create Queues** - SQS queues for job requests and status updates
-7. **Create Load Balancer** - Application Load Balancer (ALB)
-8. **Create ECS Cluster** - Container orchestration cluster
-9. **Deploy Services** - Backend and ML services on ECS
-10. **Configure IAM** - Roles and policies for services
+1. **Creates ECR Repositories**
+   - `distributed-classifier-backend`
+   - `distributed-classifier-ml-service`
 
-**Expected Duration:** 10-15 minutes (first deployment may take longer)
+2. **Builds Docker Images Locally**
+   - Builds backend service image from `backend-service/`
+   - Builds ML service image from `ml-service/`
+   - Images are built for `linux/amd64` (ECS compatible)
 
-### 5.4 Get Deployment Outputs
+3. **Pushes Images to ECR**
+   - Authenticates with ECR
+   - Pushes images to AWS
 
-After deployment completes, get the backend API endpoint:
+4. **Creates Networking**
+   - VPC with public and private subnets
+   - Security groups
+   - Internet gateway and NAT gateway
+
+5. **Creates Storage**
+   - S3 buckets: `distributed-classifier-input-*` and `distributed-classifier-output-*`
+   - DynamoDB table: `classification-jobs-*`
+
+6. **Creates Queues**
+   - SQS request queue: `classification-requests-*`
+   - SQS status queue: `classification-status-*`
+
+7. **Creates Load Balancer**
+   - Application Load Balancer (ALB)
+   - Target group for backend service
+   - Health checks
+
+8. **Creates ECS Cluster**
+   - ECS cluster: `distributed-classifier-cluster-*`
+   - Backend service (desired count: 1)
+   - ML service (desired count: 1)
+   - Autoscaling policies
+
+9. **Configures IAM**
+   - Task execution roles
+   - Task roles with permissions
+   - Autoscaling role
+
+### 6.4 Get Deployment Outputs
+
+After deployment completes:
 
 ```bash
 cd terraform
-terraform output alb_endpoint
+terraform output
 ```
 
-Example output:
-```
-"http://distributed-classifier-alb-123456789.us-east-1.elb.amazonaws.com"
-```
+**Key outputs:**
+- `alb_endpoint` - Backend API URL (e.g., `http://distributed-classifier-alb-123456789.us-east-1.elb.amazonaws.com`)
+- `cluster_name` - ECS cluster name
+- `backend_service_name` - Backend service name
+- `ml_service_name` - ML service name
 
-Save this URL - you'll need it for the dashboard and testing.
+**Save the ALB endpoint** - you'll need it for the dashboard and testing.
 
-### 5.5 Verify Services Are Running
+### 6.5 Verify Services Are Running
 
-Wait a few minutes for ECS services to start, then check:
+Wait 2-3 minutes for ECS services to start, then check:
 
 ```bash
+# From project root
 ./scripts/health-check.sh
 ```
 
-Or manually check:
+Or manually:
+
 ```bash
 # Get ALB endpoint
 ALB_ENDPOINT=$(terraform -chdir=terraform output -raw alb_endpoint)
@@ -367,34 +603,66 @@ ALB_ENDPOINT=$(terraform -chdir=terraform output -raw alb_endpoint)
 curl $ALB_ENDPOINT/health
 ```
 
-Expected response:
+**Expected response:**
 ```json
-{"status":"healthy"}
+{"status":"healthy","service":"backend-service","time":"2024-01-01T12:00:00Z"}
 ```
+
+### 6.6 Common Deployment Issues
+
+**Issue: "AWS credentials not configured"**
+```bash
+# Reconfigure AWS CLI
+aws configure
+
+# Or set environment variables
+export AWS_ACCESS_KEY_ID="your-key"
+export AWS_SECRET_ACCESS_KEY="your-secret"
+```
+
+**Issue: "Docker daemon not running"**
+- **Windows/macOS:** Start Docker Desktop
+- **Linux:** `sudo systemctl start docker`
+
+**Issue: "ConcurrentUpdateException" (Autoscaling)**
+```bash
+# Wait for autoscaling to stabilize
+./scripts/wait-for-autoscaling-ready.sh
+
+# Then retry
+cd terraform
+terraform apply
+```
+
+**Issue: "Insufficient permissions"**
+- Check IAM role has required permissions (see section 3.4)
+- Verify AWS credentials are correct
 
 ---
 
-## 6. Running the Dashboard
+## 7. Running the Dashboard
 
-The Streamlit dashboard provides a web interface for:
-- Uploading images to S3
-- Submitting classification jobs
-- Monitoring job status
-- Viewing results
-- Managing image gallery
+The Streamlit dashboard provides a web interface for the entire system.
 
-### 6.1 Install Streamlit Dependencies
+### 7.1 Install Streamlit Dependencies
 
-The dashboard script will automatically check and install dependencies, but you can install manually:
+The dashboard script will auto-install, but you can install manually:
 
 ```bash
 cd streamlit-app
 pip3 install -r requirements.txt
 ```
 
-### 6.2 Run the Dashboard
+**Dependencies:**
+- streamlit
+- requests
+- boto3
+- Pillow
+- pandas
 
-**Option 1: Using the script (Recommended)**
+### 7.2 Run the Dashboard
+
+**Option 1: Using the Script (Recommended)**
 
 ```bash
 # From project root
@@ -419,7 +687,7 @@ export BACKEND_API_URL=$(terraform -chdir=../terraform output -raw alb_endpoint)
 streamlit run app.py
 ```
 
-### 6.3 Access the Dashboard
+### 7.3 Access the Dashboard
 
 Open your browser and navigate to:
 
@@ -427,41 +695,77 @@ Open your browser and navigate to:
 http://localhost:8501
 ```
 
-If port 8501 is in use, the script will try 8502, 8503, etc. Check the terminal output for the actual port.
+If port 8501 is in use, the script will try 8502, 8503, etc. Check terminal output for the actual port.
 
-### 6.4 Configure Backend URL
+### 7.4 Configure Backend URL
 
 If the dashboard doesn't connect automatically:
 
-1. Open the sidebar (click the hamburger menu)
-2. Find "Backend URL" section
+1. Open the sidebar (click the hamburger menu ☰)
+2. Find "Backend API URL" section
 3. Enter your ALB endpoint (from `terraform output alb_endpoint`)
-4. Click "Test Connection" to verify
+4. Click "🔍 Check Backend Health" to verify
 
-### 6.5 Dashboard Features
+### 7.5 Dashboard Features
 
-- **Upload Images:** Upload multiple images directly to S3
-- **Image Gallery:** Browse, search, and delete images
-- **Submit Jobs:** Create classification jobs (MobileNet or custom CLIP)
-- **Job Status:** Monitor active jobs in real-time
-- **Job History:** View all past jobs with filtering
-- **Custom Categories:** Save and reuse label sets
+#### Upload Images
+- Upload multiple images at once
+- Direct upload to S3 using presigned URLs
+- Progress tracking for batch uploads
+
+#### Image Gallery
+- Browse all images in S3
+- Search and filter images
+- Select multiple images for batch operations
+- Delete images individually or in bulk
+- Auto-refresh every 30 seconds
+
+#### Submit Classification Jobs
+- **Two Job Types:**
+  - **Image Classification (MobileNet):** Uses ImageNet labels (1000 classes)
+  - **Custom Classification (CLIP):** Use your own custom labels
+  
+- **Custom Categories:**
+  - Save and reuse named label sets (e.g., "Animals", "Vehicles")
+  - Manage categories in the sidebar
+  - Quick selection when submitting jobs
+
+- **Configuration Options:**
+  - Top K predictions (1-10)
+  - Confidence threshold (0.0-1.0)
+  - Select multiple images per job
+
+#### Job Status & Results
+- Monitor active jobs in real-time
+- Auto-refresh option (every 5 seconds)
+- View detailed results when completed:
+  - Summary metrics (total, classified, unknown)
+  - Images grouped by label
+  - Detailed results table
+  - Processing time and model used
+
+#### Job History
+- View all submitted jobs with filtering:
+  - Filter by status (pending, queued, processing, completed, failed)
+  - Filter by job type
+- Sortable job list
+- Click on any job to view details
+- Auto-refresh every 30 seconds
 
 ---
 
-## 7. Running Tests
+## 8. Testing the System
 
-The project includes several test scripts to verify functionality and performance.
+### 8.1 Basic API Tests
 
-### 7.1 Basic API Tests
-
-**Purpose:** Test individual API endpoints.
+Test individual API endpoints:
 
 ```bash
 ./scripts/test-api.sh
 ```
 
 Or specify an endpoint:
+
 ```bash
 ./scripts/test-api.sh http://your-alb-endpoint.us-east-1.elb.amazonaws.com
 ```
@@ -476,9 +780,9 @@ Or specify an endpoint:
 - Job results retrieval
 - Image deletion
 
-### 7.2 End-to-End Deployment Test
+### 8.2 End-to-End Deployment Test
 
-**Purpose:** Comprehensive test of the entire deployment workflow.
+Comprehensive test of the entire workflow:
 
 ```bash
 ./scripts/test-deployment.sh
@@ -496,9 +800,9 @@ Or specify an endpoint:
 
 **Expected Duration:** 2-5 minutes (depends on job processing time)
 
-### 7.3 Health Check
+### 8.3 Health Check
 
-**Purpose:** Quick verification that services are running.
+Quick verification that services are running:
 
 ```bash
 ./scripts/health-check.sh
@@ -509,152 +813,7 @@ Or specify an endpoint:
 - ECS service running counts
 - Service desired vs. running task counts
 
-### 7.4 Load Tests
-
-**Purpose:** Performance and scalability testing under load.
-
-#### Prerequisites for Load Tests
-
-1. **Pre-upload test images:**
-```bash
-# Upload images to S3 (creates s3_keys.json)
-./scripts/pre-upload-images.sh
-```
-
-Or with Python:
-```bash
-python3 scripts/pre-upload-images.py --folder images --count 1000
-```
-
-2. **Install load test dependencies:**
-```bash
-cd load-tests
-pip3 install -r requirements.txt
-```
-
-#### Available Load Test Scenarios
-
-1. **Autoscaling Response Test**
-   - Tests how quickly autoscaling responds to load
-   - Requires autoscaling to be **ENABLED**
-   ```bash
-   ./scripts/run-load-test.sh autoscaling_response
-   ```
-
-2. **Queue Explosion Test**
-   - Tests system behavior when queue depth increases rapidly
-   - Requires autoscaling to be **ENABLED**
-   ```bash
-   ./scripts/run-load-test.sh queue_explosion
-   ```
-
-3. **Sustained Load Test**
-   - Tests system stability under sustained load
-   - Requires autoscaling to be **ENABLED**
-   ```bash
-   ./scripts/run-load-test.sh sustained_load
-   ```
-
-4. **Throughput Scaling Test**
-   - Tests throughput scaling curve
-   - Requires autoscaling to be **DISABLED** (manually scale ML service)
-   ```bash
-   # First, suspend autoscaling
-   ./scripts/manage-autoscaling.sh suspend
-   
-   # Scale ML service manually
-   ./scripts/scale-ml-service.sh 50
-   
-   # Run test
-   ./scripts/run-load-test.sh throughput_scaling
-   
-   # Scale back down
-   ./scripts/scale-ml-service.sh 1
-   
-   # Resume autoscaling
-   ./scripts/manage-autoscaling.sh resume
-   ```
-
-#### Run All Load Tests
-
-Run all load tests sequentially with automatic autoscaling management:
-
-```bash
-./scripts/run-all-tests.sh
-```
-
-This script will:
-- Run tests in the correct order
-- Manage autoscaling state automatically
-- Wait for queues to empty between tests
-- Reset services to baseline between tests
-- Generate reports at the end
-
-**Expected Duration:** 30-60 minutes (depends on test configuration)
-
-#### Load Test Results
-
-After tests complete, view results:
-
-```bash
-# Generate reports and graphs
-./scripts/generate-report.sh
-```
-
-Reports are saved in:
-- `load-tests/reports/` - Graphs and visualizations
-- `load-tests/results/` - Raw data (CSV, JSON)
-
-### 7.5 Managing Autoscaling for Tests
-
-Some tests require specific autoscaling states:
-
-```bash
-# Check current autoscaling status
-./scripts/manage-autoscaling.sh status
-
-# Suspend autoscaling (for manual scaling tests)
-./scripts/manage-autoscaling.sh suspend
-
-# Resume autoscaling (for autoscaling tests)
-./scripts/manage-autoscaling.sh resume
-```
-
----
-
-## 8. Verification & Testing
-
-### 8.1 Verify Deployment
-
-1. **Check Terraform outputs:**
-```bash
-cd terraform
-terraform output
-```
-
-2. **Check ECS services:**
-```bash
-# Get cluster name
-CLUSTER_NAME=$(terraform output -raw cluster_name)
-
-# List services
-aws ecs list-services --cluster $CLUSTER_NAME
-
-# Check service status
-aws ecs describe-services --cluster $CLUSTER_NAME --services <service-name>
-```
-
-3. **Check S3 buckets:**
-```bash
-aws s3 ls | grep distributed-classifier
-```
-
-4. **Check SQS queues:**
-```bash
-aws sqs list-queues | grep distributed-classifier
-```
-
-### 8.2 Test API Endpoints
+### 8.4 Manual API Testing
 
 **Health Check:**
 ```bash
@@ -679,18 +838,148 @@ curl -X POST $ALB_ENDPOINT/submit \
   }'
 ```
 
-### 8.3 Verify Dashboard Connectivity
+**Check Job Status:**
+```bash
+curl $ALB_ENDPOINT/status/{job-id}
+```
 
-1. Open dashboard at `http://localhost:8501`
-2. Check sidebar for "Backend URL"
-3. Click "Test Connection"
-4. Should see "✓ Backend is healthy"
+**Get Job Results:**
+```bash
+curl $ALB_ENDPOINT/result/{job-id}
+```
+
+**List All Jobs:**
+```bash
+curl "$ALB_ENDPOINT/jobs?limit=100&status=completed"
+```
 
 ---
 
-## 9. Troubleshooting
+## 9. Load Testing
 
-### 9.1 Common Issues
+The project includes Locust-based load testing infrastructure.
+
+### 9.1 Prerequisites for Load Tests
+
+**1. Pre-upload test images:**
+
+```bash
+# Upload images to S3 (creates s3_keys.json)
+./scripts/pre-upload-images.sh
+```
+
+Or with Python:
+
+```bash
+python3 scripts/pre-upload-images.py --folder images --count 1000
+```
+
+**2. Install load test dependencies:**
+
+```bash
+cd load-tests
+pip3 install -r requirements.txt
+```
+
+### 9.2 Available Load Test Scenarios
+
+**1. Autoscaling Response Test**
+- Tests how quickly autoscaling responds to load
+- Requires autoscaling to be **ENABLED**
+```bash
+./scripts/run-load-test.sh autoscaling_response
+```
+
+**2. Queue Explosion Test**
+- Tests system behavior when queue depth increases rapidly
+- Requires autoscaling to be **ENABLED**
+```bash
+./scripts/run-load-test.sh queue_explosion
+```
+
+**3. Sustained Load Test**
+- Tests system stability under sustained load
+- Requires autoscaling to be **ENABLED**
+```bash
+./scripts/run-load-test.sh sustained_load
+```
+
+**4. Throughput Scaling Test**
+- Tests throughput scaling curve
+- Requires autoscaling to be **DISABLED** (manually scale ML service)
+```bash
+# First, suspend autoscaling
+./scripts/manage-autoscaling.sh suspend
+
+# Scale ML service manually
+./scripts/scale-ml-service.sh 50
+
+# Run test
+./scripts/run-load-test.sh throughput_scaling
+
+# Scale back down
+./scripts/scale-ml-service.sh 1
+
+# Resume autoscaling
+./scripts/manage-autoscaling.sh resume
+```
+
+### 9.3 Run All Load Tests
+
+Run all load tests sequentially with automatic autoscaling management:
+
+```bash
+./scripts/run-all-tests.sh
+```
+
+This script will:
+- Run tests in the correct order
+- Manage autoscaling state automatically
+- Wait for queues to empty between tests
+- Reset services to baseline between tests
+- Generate reports at the end
+
+**Expected Duration:** 30-60 minutes (depends on test configuration)
+
+### 9.4 Managing Autoscaling for Tests
+
+```bash
+# Check current autoscaling status
+./scripts/manage-autoscaling.sh status
+
+# Suspend autoscaling (for manual scaling tests)
+./scripts/manage-autoscaling.sh suspend
+
+# Resume autoscaling (for autoscaling tests)
+./scripts/manage-autoscaling.sh resume
+```
+
+### 9.5 Generate Reports
+
+After tests complete, generate graphs and analysis:
+
+```bash
+./scripts/generate-report.sh
+```
+
+Reports are saved in:
+- `load-tests/reports/` - Graphs and visualizations (PNG)
+- `load-tests/results/` - Raw data (CSV, JSON)
+
+**Graph Types Generated:**
+1. Throughput vs Task Count
+2. Latency over Time (p50, p95, p99)
+3. Autoscaling Response (task count changes)
+4. Queue Depth over Time
+5. Request Rate over Time
+6. Error Rate over Time
+7. Resource Utilization (CPU and memory)
+
+---
+
+## 10. Troubleshooting
+
+### 10.1 Common Issues
 
 #### Terraform Apply Fails
 
@@ -705,8 +994,8 @@ aws configure
 
 **Error: "Docker daemon not running"**
 ```bash
-# Start Docker Desktop (Windows/macOS)
-# Or start Docker service (Linux)
+# Windows/macOS: Start Docker Desktop
+# Linux:
 sudo systemctl start docker
 ```
 
@@ -716,8 +1005,14 @@ sudo systemctl start docker
 ./scripts/wait-for-autoscaling-ready.sh
 
 # Then retry
+cd terraform
 terraform apply
 ```
+
+**Error: "Insufficient permissions"**
+- Check IAM role has required permissions
+- Verify AWS credentials are correct
+- Ensure you're using the correct AWS account
 
 #### Services Won't Start
 
@@ -743,6 +1038,7 @@ aws logs tail /ecs/distributed-classifier/ml-service --follow
 - Security group rules blocking traffic
 - Task definition errors
 - Resource limits (CPU/memory)
+- Image pull errors (check ECR permissions)
 
 #### Dashboard Won't Connect
 
@@ -758,6 +1054,7 @@ curl $(terraform -chdir=terraform output -raw alb_endpoint)/health
 **Check firewall/network:**
 - Ensure port 8501 is not blocked
 - Check if backend URL is accessible from your network
+- Verify ALB security group allows traffic
 
 #### Load Tests Fail
 
@@ -780,7 +1077,7 @@ curl $(terraform -chdir=terraform output -raw alb_endpoint)/health
 ./scripts/manage-autoscaling.sh resume  # or suspend
 ```
 
-### 9.2 Checking Service Logs
+### 10.2 Checking Service Logs
 
 **Backend Service:**
 ```bash
@@ -800,7 +1097,7 @@ aws logs filter-log-events \
   --start-time $(date -d '1 hour ago' +%s)000
 ```
 
-### 9.3 Verifying AWS Resources
+### 10.3 Verifying AWS Resources
 
 **List all resources:**
 ```bash
@@ -808,7 +1105,8 @@ aws logs filter-log-events \
 aws ecs list-clusters
 
 # ECS services
-aws ecs list-services --cluster <cluster-name>
+CLUSTER_NAME=$(terraform -chdir=terraform output -raw cluster_name)
+aws ecs list-services --cluster $CLUSTER_NAME
 
 # S3 buckets
 aws s3 ls | grep distributed-classifier
@@ -823,7 +1121,7 @@ aws dynamodb list-tables
 aws ecr describe-repositories
 ```
 
-### 9.4 Scaling Services Manually
+### 10.4 Scaling Services Manually
 
 **Scale backend service:**
 ```bash
@@ -837,11 +1135,9 @@ aws ecr describe-repositories
 
 **Check current counts:**
 ```bash
-# Get cluster and service names from Terraform
 CLUSTER_NAME=$(terraform -chdir=terraform output -raw cluster_name)
 BACKEND_SERVICE=$(terraform -chdir=terraform output -raw backend_service_name)
 
-# Check running count
 aws ecs describe-services \
   --cluster $CLUSTER_NAME \
   --services $BACKEND_SERVICE \
@@ -849,7 +1145,7 @@ aws ecs describe-services \
   --output text
 ```
 
-### 9.5 Cleanup and Reset
+### 10.5 Cleanup and Reset
 
 **Empty DynamoDB table:**
 ```bash
@@ -871,15 +1167,52 @@ terraform destroy
 
 ⚠️ **Warning:** This will delete ALL AWS resources. Make sure you want to do this!
 
-### 9.6 Getting Help
+---
 
-If you encounter issues not covered here:
+## 11. Cleanup
 
-1. Check CloudWatch logs for error messages
-2. Verify all prerequisites are installed and configured
-3. Check AWS service quotas/limits
-4. Review Terraform state: `terraform show`
-5. Check service task definitions in ECS console
+### 11.1 Destroy Infrastructure
+
+To completely remove all AWS resources:
+
+```bash
+cd terraform
+terraform destroy
+```
+
+When prompted, type `yes` to confirm.
+
+**What gets destroyed:**
+- ECS cluster and services
+- ECR repositories (and images)
+- S3 buckets (and all objects)
+- DynamoDB table (and all data)
+- SQS queues
+- Load balancer
+- VPC and networking
+- IAM roles and policies
+- CloudWatch log groups
+
+**Note:** Some resources may take a few minutes to fully delete.
+
+### 11.2 Clean Local Files
+
+**Remove Terraform state:**
+```bash
+cd terraform
+rm -rf .terraform terraform.tfstate* .terraform.lock.hcl
+```
+
+**Remove Docker images:**
+```bash
+docker system prune -a
+```
+
+**Remove Python cache:**
+```bash
+find . -type d -name __pycache__ -exec rm -r {} +
+find . -type f -name "*.pyc" -delete
+```
 
 ---
 
@@ -931,6 +1264,23 @@ After setup is complete:
 4. ✅ Upload some test images
 5. ✅ Submit a classification job
 6. ✅ View results in the dashboard
+7. ✅ Explore load testing capabilities
 
 For more information, see the main [README.md](README.md).
 
+---
+
+## Getting Help
+
+If you encounter issues not covered here:
+
+1. Check CloudWatch logs for error messages
+2. Verify all prerequisites are installed and configured
+3. Check AWS service quotas/limits
+4. Review Terraform state: `terraform show`
+5. Check service task definitions in ECS console
+6. Review the troubleshooting section above
+
+---
+
+**Congratulations!** You've successfully set up the distributed image classification system. 🎉
