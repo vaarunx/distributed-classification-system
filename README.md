@@ -261,8 +261,7 @@ distributed-classification-system/
 │   ├── test_scenarios/       # Individual test scenarios
 │   │   ├── autoscaling_response.py
 │   │   ├── queue_explosion.py
-│   │   ├── sustained_load.py
-│   │   └── throughput_scaling.py
+│   │   └── sustained_load.py
 │   ├── analysis/             # Result analysis
 │   │   ├── analyze_results.py
 │   │   └── generate_graphs.py
@@ -564,28 +563,6 @@ Tests system stability under sustained load.
 ./scripts/run-load-test.sh sustained_load
 ```
 
-#### 4. Throughput Scaling Test
-Tests throughput scaling curve with manual scaling.
-
-**Requirements:** Autoscaling **DISABLED**
-
-```bash
-# Suspend autoscaling
-./scripts/manage-autoscaling.sh suspend
-
-# Scale ML service manually
-./scripts/scale-ml-service.sh 50
-
-# Run test
-./scripts/run-load-test.sh throughput_scaling
-
-# Scale back down
-./scripts/scale-ml-service.sh 1
-
-# Resume autoscaling
-./scripts/manage-autoscaling.sh resume
-```
-
 ### Run All Tests
 
 Run all load tests sequentially with automatic autoscaling management:
@@ -609,7 +586,7 @@ This script will:
 # Check current autoscaling status
 ./scripts/manage-autoscaling.sh status
 
-# Suspend autoscaling (for manual scaling tests)
+# Suspend autoscaling
 ./scripts/manage-autoscaling.sh suspend
 
 # Resume autoscaling (for autoscaling tests)
