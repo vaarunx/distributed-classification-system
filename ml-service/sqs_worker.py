@@ -3,6 +3,7 @@ import json
 import asyncio
 import logging
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any
 
@@ -57,7 +58,12 @@ class SQSWorker:
         try:
             # Parse message body
             body = json.loads(message['Body'])
-            logger.info(f"Processing job: {body.get('job_id')}")
+            keys = body.get('s3_keys', [])
+            logger.info(f"Processing job: {body.get('job_id')} | Images: {len(keys)} | Keys: {keys}")
+            
+            # Artificial delay to simulate heavier processing as requested
+            # Goal: ~0.2s per image to hit 40-60s total for 6000 images with 20 workers
+            time.sleep(0.1)
             
             # Convert to classification request
             request = ClassificationRequest(
